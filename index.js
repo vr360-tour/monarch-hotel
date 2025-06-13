@@ -1,6 +1,6 @@
 'use strict';
 
-(function () {
+(function() {
   var Marzipano = window.Marzipano;
   var bowser = window.bowser;
   var screenfull = window.screenfull;
@@ -15,7 +15,7 @@
   var fullscreenToggleElement = document.querySelector('#fullscreenToggle');
 
   if (window.matchMedia) {
-    var setMode = function () {
+    var setMode = function() {
       if (mql.matches) {
         document.body.classList.remove('desktop');
         document.body.classList.add('mobile');
@@ -32,7 +32,7 @@
   }
 
   document.body.classList.add('no-touch');
-  window.addEventListener('touchstart', function () {
+  window.addEventListener('touchstart', function() {
     document.body.classList.remove('no-touch');
     document.body.classList.add('touch');
   });
@@ -49,12 +49,14 @@
 
   var viewer = new Marzipano.Viewer(panoElement, viewerOpts);
 
-  // 改這裡：使用單張 equirectangular 圖片 + EquirectGeometry
-  var scenes = data.scenes.map(function (data) {
-    var source = Marzipano.ImageUrlSource.fromString("images/" + data.id + ".jpg");
-    var geometry = new Marzipano.EquirectGeometry([{ width: 4096 }]);
+  var scenes = data.scenes.map(function(data) {
+    var urlPrefix = "tiles";  // 這裡是你的 tiles 資料夾名稱
+    var source = Marzipano.ImageUrlSource.fromString(
+      urlPrefix + "/" + data.id + "/{z}/{f}/{y}/{x}.jpg",
+      { cubeMapPreviewUrl: urlPrefix + "/" + data.id + "/preview.jpg" });
+    var geometry = new Marzipano.CubeGeometry(data.levels);
 
-    var limiter = Marzipano.RectilinearView.limit.traditional(4096, 100 * Math.PI / 180, 120 * Math.PI / 180);
+    var limiter = Marzipano.RectilinearView.limit.traditional(data.faceSize, 100*Math.PI/180, 120*Math.PI/180);
     var view = new Marzipano.RectilinearView(data.initialViewParameters, limiter);
 
     var scene = viewer.createScene({
@@ -64,12 +66,12 @@
       pinFirstLevel: true
     });
 
-    data.linkHotspots.forEach(function (hotspot) {
+    data.linkHotspots.forEach(function(hotspot) {
       var element = createLinkHotspotElement(hotspot);
       scene.hotspotContainer().createHotspot(element, { yaw: hotspot.yaw, pitch: hotspot.pitch });
     });
 
-    data.infoHotspots.forEach(function (hotspot) {
+    data.infoHotspots.forEach(function(hotspot) {
       var element = createInfoHotspotElement(hotspot);
       scene.hotspotContainer().createHotspot(element, { yaw: hotspot.yaw, pitch: hotspot.pitch });
     });
@@ -84,9 +86,8 @@
   var autorotate = Marzipano.autorotate({
     yawSpeed: 0.03,
     targetPitch: 0,
-    targetFov: Math.PI / 2
+    targetFov: Math.PI/2
   });
-
   if (data.settings.autorotateEnabled) {
     autorotateToggleElement.classList.add('enabled');
   }
@@ -95,11 +96,15 @@
 
   if (screenfull.enabled && data.settings.fullscreenButton) {
     document.body.classList.add('fullscreen-enabled');
-    fullscreenToggleElement.addEventListener('click', function () {
+    fullscreenToggleElement.addEventListener('click', function() {
       screenfull.toggle();
     });
-    screenfull.on('change', function () {
-      fullscreenToggleElement.classList.toggle('enabled', screenfull.isFullscreen);
+    screenfull.on('change', function() {
+      if (screenfull.isFullscreen) {
+        fullscreenToggleElement.classList.add('enabled');
+      } else {
+        fullscreenToggleElement.classList.remove('enabled');
+      }
     });
   } else {
     document.body.classList.add('fullscreen-disabled');
@@ -111,9 +116,9 @@
     showSceneList();
   }
 
-  scenes.forEach(function (scene) {
+  scenes.forEach(function(scene) {
     var el = document.querySelector('#sceneList .scene[data-id="' + scene.data.id + '"]');
-    el.addEventListener('click', function () {
+    el.addEventListener('click', function() {
       switchScene(scene);
       if (document.body.classList.contains('mobile')) {
         hideSceneList();
@@ -132,12 +137,12 @@
   var friction = 3;
 
   var controls = viewer.controls();
-  controls.registerMethod('upElement', new Marzipano.ElementPressControlMethod(viewUpElement, 'y', -velocity, friction), true);
-  controls.registerMethod('downElement', new Marzipano.ElementPressControlMethod(viewDownElement, 'y', velocity, friction), true);
-  controls.registerMethod('leftElement', new Marzipano.ElementPressControlMethod(viewLeftElement, 'x', -velocity, friction), true);
-  controls.registerMethod('rightElement', new Marzipano.ElementPressControlMethod(viewRightElement, 'x', velocity, friction), true);
-  controls.registerMethod('inElement', new Marzipano.ElementPressControlMethod(viewInElement, 'zoom', -velocity, friction), true);
-  controls.registerMethod('outElement', new Marzipano.ElementPressControlMethod(viewOutElement, 'zoom', velocity, friction), true);
+  controls.registerMethod('upElement',    new Marzipano.ElementPressControlMethod(viewUpElement,     'y', -velocity, friction), true);
+  controls.registerMethod('downElement',  new Marzipano.ElementPressControlMethod(viewDownElement,   'y',  velocity, friction), true);
+  controls.registerMethod('leftElement',  new Marzipano.ElementPressControlMethod(viewLeftElement,   'x', -velocity, friction), true);
+  controls.registerMethod('rightElement', new Marzipano.ElementPressControlMethod(viewRightElement,  'x',  velocity, friction), true);
+  controls.registerMethod('inElement',    new Marzipano.ElementPressControlMethod(viewInElement,  'zoom', -velocity, friction), true);
+  controls.registerMethod('outElement',   new Marzipano.ElementPressControlMethod(viewOutElement, 'zoom',  velocity, friction), true);
 
   function sanitize(s) {
     return s.replace('&', '&amp;').replace('<', '&lt;').replace('>', '&gt;');
@@ -159,7 +164,11 @@
   function updateSceneList(scene) {
     for (var i = 0; i < sceneElements.length; i++) {
       var el = sceneElements[i];
-      el.classList.toggle('current', el.getAttribute('data-id') === scene.data.id);
+      if (el.getAttribute('data-id') === scene.data.id) {
+        el.classList.add('current');
+      } else {
+        el.classList.remove('current');
+      }
     }
   }
 
@@ -179,7 +188,9 @@
   }
 
   function startAutorotate() {
-    if (!autorotateToggleElement.classList.contains('enabled')) return;
+    if (!autorotateToggleElement.classList.contains('enabled')) {
+      return;
+    }
     viewer.startMovement(autorotate);
     viewer.setIdleMovement(3000, autorotate);
   }
@@ -190,34 +201,39 @@
   }
 
   function toggleAutorotate() {
-    autorotateToggleElement.classList.toggle('enabled');
     if (autorotateToggleElement.classList.contains('enabled')) {
-      startAutorotate();
-    } else {
+      autorotateToggleElement.classList.remove('enabled');
       stopAutorotate();
+    } else {
+      autorotateToggleElement.classList.add('enabled');
+      startAutorotate();
     }
   }
 
   function createLinkHotspotElement(hotspot) {
     var wrapper = document.createElement('div');
-    wrapper.classList.add('hotspot', 'link-hotspot');
+    wrapper.classList.add('hotspot');
+    wrapper.classList.add('link-hotspot');
 
     var icon = document.createElement('img');
     icon.src = 'img/link.png';
     icon.classList.add('link-hotspot-icon');
 
-    ['-ms-transform', '-webkit-transform', 'transform'].forEach(function (prop) {
-      icon.style[prop] = 'rotate(' + hotspot.rotation + 'rad)';
-    });
+    var transformProperties = [ '-ms-transform', '-webkit-transform', 'transform' ];
+    for (var i = 0; i < transformProperties.length; i++) {
+      var property = transformProperties[i];
+      icon.style[property] = 'rotate(' + hotspot.rotation + 'rad)';
+    }
 
-    wrapper.addEventListener('click', function () {
+    wrapper.addEventListener('click', function() {
       switchScene(findSceneById(hotspot.target));
     });
 
     stopTouchAndScrollEventPropagation(wrapper);
 
     var tooltip = document.createElement('div');
-    tooltip.classList.add('hotspot-tooltip', 'link-hotspot-tooltip');
+    tooltip.classList.add('hotspot-tooltip');
+    tooltip.classList.add('link-hotspot-tooltip');
     tooltip.innerHTML = findSceneDataById(hotspot.target).name;
 
     wrapper.appendChild(icon);
@@ -228,7 +244,8 @@
 
   function createInfoHotspotElement(hotspot) {
     var wrapper = document.createElement('div');
-    wrapper.classList.add('hotspot', 'info-hotspot');
+    wrapper.classList.add('hotspot');
+    wrapper.classList.add('info-hotspot');
 
     var header = document.createElement('div');
     header.classList.add('info-hotspot-header');
@@ -270,12 +287,13 @@
     modal.classList.add('info-hotspot-modal');
     document.body.appendChild(modal);
 
-    var toggle = function () {
+    var toggle = function() {
       wrapper.classList.toggle('visible');
       modal.classList.toggle('visible');
     };
 
     wrapper.querySelector('.info-hotspot-header').addEventListener('click', toggle);
+
     modal.querySelector('.info-hotspot-close-wrapper').addEventListener('click', toggle);
 
     stopTouchAndScrollEventPropagation(wrapper);
@@ -283,25 +301,34 @@
     return wrapper;
   }
 
-  function stopTouchAndScrollEventPropagation(element) {
-    ['touchstart', 'touchmove', 'touchend', 'touchcancel', 'wheel', 'mousewheel'].forEach(function (event) {
-      element.addEventListener(event, function (e) {
-        e.stopPropagation();
+  function stopTouchAndScrollEventPropagation(element, eventList) {
+    var eventList = [ 'touchstart', 'touchmove', 'touchend', 'touchcancel',
+                      'wheel', 'mousewheel' ];
+    for (var i = 0; i < eventList.length; i++) {
+      element.addEventListener(eventList[i], function(event) {
+        event.stopPropagation();
       });
-    });
+    }
   }
 
   function findSceneById(id) {
-    return scenes.find(function (scene) {
-      return scene.data.id === id;
-    });
+    for (var i = 0; i < scenes.length; i++) {
+      if (scenes[i].data.id === id) {
+        return scenes[i];
+      }
+    }
+    return null;
   }
 
   function findSceneDataById(id) {
-    return data.scenes.find(function (scene) {
-      return scene.id === id;
-    });
+    for (var i = 0; i < data.scenes.length; i++) {
+      if (data.scenes[i].id === id) {
+        return data.scenes[i];
+      }
+    }
+    return null;
   }
 
   switchScene(scenes[0]);
+
 })();
